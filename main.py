@@ -21,18 +21,23 @@ import re
 import sys
 from pathlib import Path
 
+from curator.cik import LookupIndex, reconcile_filers, unpad_cik, write_filers_csv
+from curator.constants import FILING_DATE_CUTOFF, REPORT_PERIODS
+from curator.edgar import (
+    EdgarClient,
+    discover_filings,
+    download_all_filings,
+    download_lookup,
+    has_inscope_13f,
+)
+from curator.parse import parse_all
+from curator.write import write_parquet
+
 ROOT = Path(__file__).resolve().parent
 FILERS = ROOT / "filers.csv"
 OUTPUT = ROOT / "output"
+CACHE = ROOT / ".cache"
 
-# Scope. See docs/01-source.md — filter report periods on reportDate, and exclude
-# anything accepted after the cutoff.
-REPORT_PERIODS = ("2026-03-31", "2026-06-30")
-FILING_DATE_CUTOFF = "2026-08-18"  # inclusive
-
-# SEC rejects requests without a contact address, and a run that gets the department
-# blocked is worth failing fast on. Loose on purpose: we check an address is present,
-# not that it is well-formed.
 UA_PATTERN = re.compile(r"^\S.*\s+[^@\s]+@[^@\s]+\.[a-z]{2,}\s*$", re.I)
 
 
@@ -43,20 +48,62 @@ def load_filers() -> list[dict[str, str]]:
 
 
 def run(user_agent: str, output: Path) -> None:
-    """Build the dataset.
+    """Build the dataset: verify CIKs, fetch 13F XML, parse, write Parquet."""
+    cache_dir = CACHE
+    client = EdgarClient(user_agent=user_agent, cache_dir=cache_dir)
+    try:
+        print("Reconciling roster CIKs against SEC lookup...", file=sys.stderr)
+        pairs = download_lookup(client)
+        index = LookupIndex(pairs)
+        probe_cache: dict[str, bool] = {}
 
-    Suggested shape, not a requirement:
+        def probe(cik: str) -> bool:
+            if cik not in probe_cache:
+                probe_cache[cik] = has_inscope_13f(client, cik)
+            return probe_cache[cik]
 
-        1. verify the CIKs against SEC's lookup file      docs/01-source.md
-        2. find in-scope filings via the submissions API
-        3. download the filings, caching as you go
-        4. parse into the schema                          docs/SCHEMA.md
-        5. write output/filings.parquet and output/holdings.parquet
-    """
-    raise NotImplementedError(
-        "Implement your pipeline here. Start with docs/01-source.md, then "
-        "docs/SCHEMA.md for the output contract."
-    )
+        reconciled = reconcile_filers(load_filers(), index, filings_probe=probe)
+        write_filers_csv(output / "filers.csv", reconciled)
+        n_corr = sum(1 for f in reconciled if f.cik_source == "corrected")
+        print(
+            f"Wrote {output / 'filers.csv'} ({n_corr} CIK(s) corrected)",
+            file=sys.stderr,
+        )
+
+        print("Discovering in-scope 13F filings...", file=sys.stderr)
+        refs = discover_filings(client, reconciled)
+        print(f"Discovered {len(refs)} filings (expect 40)", file=sys.stderr)
+        if len(refs) != 40:
+            print(
+                f"WARNING: expected 40 filings (20 managers x 2 quarters); got {len(refs)}. "
+                f"Check CIKs and filingDate <= {FILING_DATE_CUTOFF}, "
+                f"reportDate in {sorted(REPORT_PERIODS)}.",
+                file=sys.stderr,
+            )
+
+        print("Downloading filing documents...", file=sys.stderr)
+        expected_dirs = {unpad_cik(f.cik) for f in reconciled}
+        filings_root = output / "filings"
+        if filings_root.exists():
+            import shutil
+
+            for child in sorted(filings_root.iterdir(), key=lambda p: p.name):
+                if child.is_dir() and child.name not in expected_dirs:
+                    shutil.rmtree(child)
+                    print(f"removed leftover filings dir {child.name}", file=sys.stderr)
+        refs = download_all_filings(client, refs, output / "filings")
+
+        print("Parsing XML → rows...", file=sys.stderr)
+        filings_rows, holdings_rows = parse_all(refs)
+        write_parquet(output, filings_rows, holdings_rows)
+        print(
+            f"Wrote {len(filings_rows)} filings, {len(holdings_rows)} holdings → {output}",
+            file=sys.stderr,
+        )
+        client.manifest.print_summary()
+        client.manifest.write_jsonl(cache_dir / "manifest.jsonl")
+    finally:
+        client.close()
 
 
 def main() -> int:

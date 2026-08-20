@@ -1,21 +1,24 @@
-"""Your tests. Presence and pass rate are part of how the code is read.
+"""Pipeline-level tests. Parser identity is in test_parse.py; dates in test_dates.py."""
 
-You do not need many. A handful covering the parts most likely to be wrong is worth more
-than broad coverage of trivial code. Good candidates here:
+from __future__ import annotations
 
-  - CUSIP normalisation, especially leading zeros and letter-prefixed CINS codes
-  - namespace handling across filings that declare it differently
-  - the report period and filing-date filters
-  - anything your agent does with model output before acting on it
+import pytest
 
-Run with:
-
-    python -m pytest -q
-
-`LLM_MODE=mock` in your .env lets agent tests run with no model at all.
-"""
+from curator.edgar import EdgarClient, EdgarError, pick_filing_documents
 
 
-def test_placeholder():
-    """Replace this."""
-    assert True
+def test_user_agent_missing_email_fails_loud():
+    with pytest.raises(EdgarError, match="User-Agent"):
+        EdgarClient(user_agent="Eugene Cheung", cache_dir=__import__("pathlib").Path("/tmp"))
+
+
+def test_index_json_picks_infotable_not_xsl():
+    items = [
+        {"name": "primary.xsl"},
+        {"name": "primary_doc.xml"},
+        {"name": "form13fInfoTable.xml"},
+        {"name": "xslF345X01/primary_doc.xml"},
+    ]
+    cover, table = pick_filing_documents(items, primary_document="primary_doc.xml")
+    assert cover == "primary_doc.xml"
+    assert table == "form13fInfoTable.xml"

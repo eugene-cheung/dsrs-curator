@@ -10,7 +10,22 @@ you nothing.
 
 | # | What was unclear | What you assumed | Why |
 |---|---|---|---|
-| 1 | *e.g. how to treat a filing whose cover page omits a required field* | *kept the row, left the field null, flagged it* | *dropping it would understate holdings; the gap is real and worth recording* |
+| 1 | Roster CIK vs SEC lookup name | The **name** is the identity. A given CIK is kept only when its lookup name is the same firm (first token matches and token sets nest / Jaccard ≥ 0.7). Otherwise the CIK is replaced. The fund is never renamed to match a bad CIK. | A wrong CIK still resolves to a real filer. `0001697748` is ARK Investment Management, not Situational Awareness. |
+| 2 | `The Baupost Group LLC` vs `BAUPOST GROUP INC` (842322) vs `BAUPOST GROUP LLC/MA` (1061768) | Keep **1061768** (`given`). `/MA` is a jurisdiction tag on the same LLC, not a disagreement. | Exact normalised-name match would have uniquely selected `BAUPOST GROUP INC`, which files no 13F in this window. Names agreed; we did not "correct" a working CIK. |
+| 3 | `Tudor Investment Corp` vs `TUDOR INVESTMENT CORP` (1080384) vs `TUDOR INVESTMENT CORP ET AL` (923093) | Treat trailing `ET AL` as the same legal name. When both namesakes remain, pick the one that filed an in-scope 13F. That is **923093** (`corrected`). | 1080384 matches the roster string exactly but has no 13F-HR/NT in 2026 Q1/Q2. 923093 is the 13F filer (Q2 accession `0000902664-26-003485`). Given CIK `854157` is the State of Wisconsin Investment Board. |
+| 4 | `Situational Awareness LP` given CIK `1697748` | Correct to **2045724**. | Lookup maps `1697748` to ARK Investment Management LLC. `2045724` is the unique name match and files 13F-HR for both quarters. |
+| 5 | Ambiguous names with no unique 13F filer | Do not guess; keep the given CIK and log it. | Spec: if ambiguous, do not guess. |
+
+## Chapter 1 — CIK verification
+
+Two corrections, eighteen `given`:
+
+| fund_name | given | used | cik_source | evidence |
+|---|---|---|---|---|
+| Tudor Investment Corp | 854157 | 923093 | corrected | given → Wisconsin Investment Board; 13F filer is TUDOR INVESTMENT CORP ET AL |
+| Situational Awareness LP | 1697748 | 2045724 | corrected | given → ARK Investment Management LLC |
+
+`output/filers.csv` is 20 rows, CIKs unpadded, sorted by CIK ascending, names exactly as rostered. Discovery then found **40** filings (`reportDate` ∈ {2026-03-31, 2026-06-30}, `filingDate` ≤ 2026-08-18). Pershing Square filed `13F-HR` for Q1 and `13F-NT` for Q2.
 
 ## Questions you sent us
 
