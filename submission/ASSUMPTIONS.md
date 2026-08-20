@@ -15,6 +15,7 @@ you nothing.
 | 3 | `Tudor Investment Corp` vs `TUDOR INVESTMENT CORP` (1080384) vs `TUDOR INVESTMENT CORP ET AL` (923093) | Treat trailing `ET AL` as the same legal name. When both namesakes remain, pick the one that filed an in-scope 13F. That is **923093** (`corrected`). | 1080384 matches the roster string exactly but has no 13F-HR/NT in 2026 Q1/Q2. 923093 is the 13F filer (Q2 accession `0000902664-26-003485`). Given CIK `854157` is the State of Wisconsin Investment Board. |
 | 4 | `Situational Awareness LP` given CIK `1697748` | Correct to **2045724**. | Lookup maps `1697748` to ARK Investment Management LLC. `2045724` is the unique name match and files 13F-HR for both quarters. |
 | 5 | Ambiguous names with no unique 13F filer | Do not guess; keep the given CIK and log it. | Spec: if ambiguous, do not guess. |
+| 6 | Information table filename | If `index.json` has no `*infotable*` XML, take the other (largest) `.xml` besides `primary_doc.xml`. | RenTec/Baupost/Millennium/Balyasny use custom names. Matching only `infotable` leaves a 13F-HR with a declared table and zero parsed rows. |
 
 ## Chapter 1 — CIK verification
 
@@ -26,6 +27,8 @@ Two corrections, eighteen `given`:
 | Situational Awareness LP | 1697748 | 2045724 | corrected | given → ARK Investment Management LLC |
 
 `output/filers.csv` is 20 rows, CIKs unpadded, sorted by CIK ascending, names exactly as rostered. Discovery then found **40** filings (`reportDate` ∈ {2026-03-31, 2026-06-30}, `filingDate` ≤ 2026-08-18). Pershing Square filed `13F-HR` for Q1 and `13F-NT` for Q2.
+
+Cover namespace in this slice is `http://www.sec.gov/edgar/thirteenffiler`. Combined XML in `output/filings/` wraps `primary_doc` + the information-table document so `eda.py` can see both. Pipeline run twice: parquet SHA-1 `51c3086a…` / `0586c230…` unchanged; second run 142/142 cache hits.
 
 ## Questions you sent us
 

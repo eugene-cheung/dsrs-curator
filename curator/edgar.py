@@ -267,36 +267,57 @@ def _as_item_list(index_json: dict[str, Any]) -> list[dict[str, Any]]:
     return list(items)
 
 
+def _item_size(item: dict[str, Any]) -> int:
+    try:
+        return int(item.get("size") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def pick_filing_documents(
     items: list[dict[str, Any]],
     primary_document: str = "",
 ) -> tuple[str | None, str | None]:
-    """Return (cover_filename, infotable_filename). Table may be None for notices."""
-    names = [item.get("name", "") for item in items if item.get("name")]
+    """Return (cover_filename, infotable_filename). Table may be None for notices.
+
+    The information table is *not* always named infotable.xml. RenTec uses
+    `renaissance13Fq12026_holding.xml`, Baupost `BGLLCQ12026.xml`, etc.
+    Cover is the primary document (small). The table is the other XML, or
+    the largest remaining XML if several exist.
+    """
+    by_name = {item.get("name", ""): item for item in items if item.get("name")}
+    names = list(by_name)
     xml_like = [
         n
         for n in names
-        if n.lower().endswith((".xml", ".html", ".htm")) and "xsl" not in n.lower()
+        if n.lower().endswith((".xml", ".html", ".htm"))
+        and "xsl" not in n.lower()
+        and "index" not in n.lower()
     ]
-    table = None
     cover = None
-    for n in xml_like:
-        ln = n.lower()
-        if any(tok in ln for tok in ("infotable", "informationtable", "form13finfo")):
-            table = n
-            continue
-        if "primary" in ln or n == primary_document:
-            cover = n
-    if cover is None and primary_document in names:
+    if primary_document in xml_like:
         cover = primary_document
-    if cover is None:
+    else:
         for n in xml_like:
-            ln = n.lower()
-            if n != table and not any(tok in ln for tok in ("infotable", "informationtable")):
+            if "primary" in n.lower():
                 cover = n
                 break
     if cover is None and xml_like:
-        cover = xml_like[0]
+        # Cover pages are tiny; don't pick the holdings file as cover.
+        cover = min(xml_like, key=lambda n: (_item_size(by_name[n]) or 10**12, n))
+
+    others = [n for n in xml_like if n != cover]
+    table = None
+    for n in others:
+        ln = n.lower()
+        if any(
+            tok in ln
+            for tok in ("infotable", "informationtable", "form13finfo", "holding")
+        ):
+            table = n
+            break
+    if table is None and others:
+        table = max(others, key=lambda n: (_item_size(by_name[n]), n))
     return cover, table
 
 
