@@ -30,6 +30,23 @@ Two corrections, eighteen `given`:
 
 Cover namespace in this slice is `http://www.sec.gov/edgar/thirteenffiler`. Combined XML in `output/filings/` wraps `primary_doc` + the information-table document so `eda.py` can see both. Pipeline run twice: parquet SHA-1 `51c3086a…` / `0586c230…` unchanged; second run 142/142 cache hits.
 
+## Chapter 4 — Agent semantics
+
+| # | What was unclear | What you assumed | Why |
+|---|---|---|---|
+| 7 | What “largest Apple position” returns | The **dollar value** of the winning manager’s own common-stock Apple lots (`put_call` null), not the manager’s name. | The contract example is a USD number. Sources name the filing. |
+| 8 | Options vs common | “Position” / “held” / “largest” uses `put_call` null. Calls/puts only when the question says so. | Filers leave the element off for ordinary stock and type `Call`/`Put` when it is an option. |
+| 9 | Shares | `ssh_prnamt_type == SH` only. PRN is never added in. | Shares and principal dollars are different units. |
+| 10 | Combination reports | When the question names an **issuer**, ignore `other_manager` lots (except `0` / null). Those rows belong to someone on the cover list. “Total reported value” and “most call options” use the whole information table / cover total. | AQR’s Apple book is $5.0B including sequence 1–13 and $4.75B on its own lots. Mixing them in a “who held Apple” ranking credits the platform for its clients. |
+| 11 | Q1→Q2 “added” | Delta = Q2 − Q1. Missing Q1 = 0 only if that manager filed a **13F-HR** for Q1. 13F-NT managers are not ranked. | They did not report positions in their own table. |
+| 12 | “Directly” | Exists against that manager’s own information table. Pershing Q2 is 13F-NT → `"no"` plus the notice accession. | Spec: NT is not a guess from a parent filing. |
+| 13 | 2026 Q3 / hostile input | `null` before the model runs. Guided JSON cannot emit `2026Q3`, so a plan-only check would answer from Q1/Q2. | Honest null beats a confident wrong number. |
+| 14 | Distinct issuers | Count distinct `name_of_issuer` as filed (after common-stock filter), not CUSIPs. | The question asked for issuers, not securities. |
+| 15 | Total reported value | Cover `table_value_total`, not a recomputed sum of holdings. | “Reported” is what they declared. |
+| 16 | `agent_usage.json` | Written under `LLM_MODE=mock` (0 tokens). Re-run `python -m agents.usage_run` against a live endpoint before the video if one is available. | Frozen `llm.py` does not charge the budget in mock. |
+
+Issuer aliases (question → first token on the filing): Apple/AAPL, Nvidia/NVDA, Microsoft/MSFT, Tesla/TSLA, plus Amazon, Alphabet/Google, Meta/Facebook, Netflix, Berkshire. `APPLE HOSPITALITY REIT` does not match Apple.
+
 ## Questions you sent us
 
 If you emailed dsrs@business.illinois.edu and proceeded before hearing back, note it

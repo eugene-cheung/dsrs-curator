@@ -17,7 +17,7 @@ Roughly, by chapter. A sentence each is enough.
 | 1 · Source | Implemented `curator/cik.py` / `edgar.py` from the spec: lookup parse, name-agree-before-correct, ET AL namesake + 13F probe, cache, 5 rps. AI did not choose CIKs — those are lookup evidence (Tudor 923093, Situational Awareness 2045724). |
 | 2 · Interrogate | Wrote `submission/eda.py` to scan every XML. Findings are from that run: Pershing NT empty totals, custom infotable filenames, `thirteenffiler` namespace, Call/Put title case, duplicate CUSIPs, `otherManagers2Info` sequences. |
 | 3 · Structure | Parser matches local names (`{*}`), writes explicit Arrow schema, no pandas. `verify.py` 8/8; second run byte-identical parquet, 142/142 cache hits. |
-| 4 · Serve | |
+| 4 · Serve | Implemented plan / validate / execute / resolve. The model only emits a flat query plan. Numbers come from PyArrow/Python. Tests are `LLM_MODE=mock`. |
 
 ## What you would change
 
