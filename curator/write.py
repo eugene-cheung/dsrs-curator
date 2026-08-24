@@ -79,3 +79,15 @@ def write_parquet(
     pq.write_table(filings, filings_path, compression="snappy")
     pq.write_table(holdings, holdings_path, compression="snappy")
     return filings_path, holdings_path
+
+
+ATTRIBUTED_SCHEMA = pa.schema(
+    list(HOLDINGS_SCHEMA) + [pa.field("attributed_to_cik", pa.string(), nullable=False)]
+)
+
+
+def write_attributed_parquet(path: Path, rows: list[dict[str, Any]]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    table = table_from_rows(rows, ATTRIBUTED_SCHEMA)
+    pq.write_table(table, path, compression="snappy")
+    return path

@@ -47,6 +47,65 @@ Cover namespace in this slice is `http://www.sec.gov/edgar/thirteenffiler`. Comb
 
 Issuer aliases (question → first token on the filing): Apple/AAPL, Nvidia/NVDA, Microsoft/MSFT, Tesla/TSLA, plus Amazon, Alphabet/Google, Meta/Facebook, Netflix, Berkshire. `APPLE HOSPITALITY REIT` does not match Apple.
 
+## Bonus 1 — Notice attribution
+
+The only roster 13F-NT is Pershing Square Capital Management L.P. (`1336528`), accession
+`0001172661-26-003777`, report period 2026-06-30. `additionalInformation` says holdings
+are in the public parent's report. Cover `otherManagersInfo` names **PERSHING SQUARE INC.**
+CIK `0002026053`, 13F file number `028-25746`. The notice does not give an accession.
+
+That CIK's in-scope 13F-HR for the same `reportDate` is `0001172661-26-003790` (filed
+2026-08-14). Cover report type is `13F HOLDINGS REPORT` even though
+`otherIncludedManagersCount` is 6. The join key is `summaryPage/otherManagers2Info`:
+
+| seq | CIK | name |
+|---|---|---|
+| 1 | 1336528 | Pershing Square Capital Management, L.P. (`028-11694`, matches the notice) |
+| 2 | 1336477 | PSCM GP, LLC |
+| 3 | 2129159 | Pershing Square Partner Group LLC |
+| 4 | 2027456 | Pershing Square Management, LLC |
+| 5 | 2129160 | Pershing Square PSUS Holdings, LLC |
+| 6 | 2131683 | Pershing Square HHH Holdings, LLC |
+
+Fifteen information-table rows. None are untagged (the parent's own book). Fourteen list
+sequence `1` (`1, 2, 3, 4` or `1, 2, 3, 4, 6`) — shared discretion, not sole PSCM lots.
+One row, **PERSHING SQUARE USA LTD** (`149,520,000`, `other_manager=3, 4, 5`), does not
+include sequence 1 and is excluded. `output/bonus_attributed.parquet` is those 14 rows;
+`accession_number` is the parent's; `attributed_to_cik` is `0001336528`. Sum of value
+`$19,316,172,772` vs parent `tableValueTotal` `$19,465,692,772` (the excluded lot).
+
+Taking every parent row, or only rows with `other_manager` exactly `1` (zero rows), would
+be wrong. Q1 is not attributed: PSCM filed its own 13F-HR that quarter.
+
+## Bonus 2 — CUSIP validation
+
+SEC list: `https://www.sec.gov/files/investment/13flist2026q2-txt.txt` (25,333 lines × 80
+columns). CUSIP = columns 1–9; column 10 is `*` or space (not part of the identifier);
+issuer = columns 11–40. Spaced historical CUSIPs (`037833 10 0`) are compacted the same
+way as `holdings.parquet` (`normalize_cusip`) so a formatting mismatch cannot look like a
+filer error.
+
+2026 Q2 holdings: **32,176** distinct `(accession_number, cusip)` pairs, **8,613** distinct
+CUSIPs, **68,070** rows. After that normalisation, **32,176 / 32,176** are on the official
+list (`assessment` empty). No `LIKELY_FILER_ERROR` in this slice. I did not invent misses.
+
+Residual risk I would still tell the researcher:
+
+- Option lots often carry the **underlying** CUSIP plus `putCall=Call`/`Put`, not the
+  list's separate option CUSIPs (`037833900` / `037833950` for Apple). The identifier is
+  on the list; the class is in `put_call`.
+- Issuer names are free text (`A O Smith Corp - US` vs list `SMITH A O CORP`). First-token
+  disagreements here were inverted names and ETF series vs fund names, not swapped CUSIPs.
+- CINS (letter-prefix) CUSIPs in this slice are on the list; they are reportable foreign
+  identifiers, not errors.
+- The list is a quarter snapshot. A later quarter can add or drop a CUSIP (`TIMING`) even
+  if this one is clean.
+
+**What I would tell the researcher:** in this Q1/Q2 2026 roster extract, you can treat
+reported CUSIPs as members of the Q2 official 13F list. You cannot treat issuer spelling
+as standardised, and you must not assume an option row's CUSIP identifies a listed option
+contract.
+
 ## Questions you sent us
 
 If you emailed dsrs@business.illinois.edu and proceeded before hearing back, note it

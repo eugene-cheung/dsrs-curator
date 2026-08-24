@@ -30,6 +30,8 @@ from curator.edgar import (
     download_lookup,
     has_inscope_13f,
 )
+from curator.bonus_cusip import run_cusip_validation
+from curator.bonus_notice import run_notice_attribution
 from curator.parse import parse_all
 from curator.write import write_parquet
 
@@ -100,6 +102,8 @@ def run(user_agent: str, output: Path) -> None:
             f"Wrote {len(filings_rows)} filings, {len(holdings_rows)} holdings → {output}",
             file=sys.stderr,
         )
+        run_notice_attribution(client, refs, output)
+        run_cusip_validation(client, output)
         client.manifest.print_summary()
         client.manifest.write_jsonl(cache_dir / "manifest.jsonl")
     finally:

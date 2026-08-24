@@ -259,6 +259,33 @@ def discover_filings(
     return refs
 
 
+def discover_cik_filings(
+    client: EdgarClient,
+    cik: str,
+    fund_name: str,
+) -> list[FilingRef]:
+    """In-scope 13Fs for one CIK. Used to fetch a notice's parent, who may not be on the roster."""
+    url = SUBMISSIONS_URL.format(cik10=pad_cik(cik))
+    payload, _ = client.get_json(url)
+    refs: list[FilingRef] = []
+    for row in _recent_filings(payload):
+        if not in_scope_filing(row["form"], row["reportDate"], row["filingDate"]):
+            continue
+        refs.append(
+            FilingRef(
+                fund_name=fund_name,
+                cik=unpad_cik(cik),
+                form_type=row["form"],
+                accession_dashed=row["accession"],
+                report_date=row["reportDate"],
+                filing_date=row["filingDate"],
+                primary_document=row.get("primaryDocument") or "",
+            )
+        )
+    refs.sort(key=lambda r: (r.filing_date, r.accession_dashed))
+    return refs
+
+
 def _as_item_list(index_json: dict[str, Any]) -> list[dict[str, Any]]:
     directory = index_json.get("directory", index_json)
     items = directory.get("item", [])

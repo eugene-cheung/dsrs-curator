@@ -291,3 +291,78 @@ def other_managers_from_cover(xml_path: Path) -> list[dict[str, str | None]]:
         seen.add(key)
         unique.append(row)
     return unique
+
+
+def other_manager_tokens(raw: str | None) -> list[str]:
+    """`other_manager` is a sequence reference; some filers list several, comma-separated."""
+    if raw is None:
+        return []
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def token_matches_sequence(token: str, sequence: str) -> bool:
+    a = token.strip()
+    b = sequence.strip()
+    if a == b:
+        return True
+    try:
+        return int(a) == int(b)
+    except ValueError:
+        return False
+
+
+def holding_includes_sequence(other_manager: str | None, sequence: str) -> bool:
+    return any(token_matches_sequence(tok, sequence) for tok in other_manager_tokens(other_manager))
+
+
+def sequenced_other_managers(xml_path: Path) -> list[dict[str, str | None]]:
+    """summaryPage/otherManagers2Info entries that carry a sequence number.
+
+    That sequence is what an information-table `other_manager` value points at.
+    Cover-page otherManagersInfo (no sequence) is a name list, not the join key.
+    """
+    root = _load_tree(xml_path)
+    out: list[dict[str, str | None]] = []
+    for el in _findall(root, "otherManager2"):
+        seq = _child_text(el, "sequenceNumber") or _child_text(el, "otherManagerSeq")
+        if seq is None:
+            continue
+        inner = _first(el, "otherManager")
+        name = _child_text(inner, "name") if inner is not None else _child_text(el, "name")
+        cik = _child_text(inner, "cik") if inner is not None else _child_text(el, "cik")
+        file_no = (
+            _child_text(inner, "form13FFileNumber")
+            if inner is not None
+            else _child_text(el, "form13FFileNumber")
+        )
+        out.append(
+            {
+                "sequence": seq.strip(),
+                "name": name,
+                "cik": unpad_cik(cik) if cik and re.search(r"\d", cik) else None,
+                "form_13f_file_number": file_no,
+            }
+        )
+    out.sort(key=lambda row: (int(row["sequence"] or 10**9), row["name"] or ""))
+    return out
+
+
+def notice_parent_from_cover(xml_path: Path) -> dict[str, str | None] | None:
+    """CIK named on a 13F-NT cover as the manager whose report includes these holdings.
+
+    Nested under coverPage/otherManagersInfo — not the sequenced otherManager2 list.
+    """
+    root = _load_tree(xml_path)
+    for el in _findall(root, "otherManager"):
+        ancestors = {_local(p) for p in el.iterancestors()}
+        if "filingManager" in ancestors or "otherManager2" in ancestors:
+            continue
+        cik = _child_text(el, "cik")
+        if not cik or not re.search(r"\d", cik):
+            continue
+        return {
+            "cik": unpad_cik(cik),
+            "name": _child_text(el, "name"),
+            "form_13f_file_number": _child_text(el, "form13FFileNumber"),
+        }
+    return None
